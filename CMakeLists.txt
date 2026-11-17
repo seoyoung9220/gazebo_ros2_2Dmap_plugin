@@ -111,6 +111,13 @@ add_library(gz_2Dmap_system SHARED
   src/gz_2Dmap_system.cc
 )
 
+# Tell the source code which header/namespace convention to use.
+# GZ_PREFIX "gz" -> Garden (gz-sim7) / Harmonic (gz-sim8): use gz:: namespace.
+# GZ_PREFIX "ignition" -> Fortress (ignition-gazebo6): use ignition:: namespace.
+if(GZ_PREFIX STREQUAL "gz")
+  target_compile_definitions(gz_2Dmap_system PRIVATE GZ_2DMAP_USE_GZ_NAMESPACE)
+endif()
+
 # Link against packages based on naming convention
 if(GZ_PREFIX STREQUAL "gz")
   target_link_libraries(gz_2Dmap_system

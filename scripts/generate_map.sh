@@ -40,8 +40,12 @@ if ! grep -q '<sdf\|<world' "$WORLD_FILE" 2>/dev/null; then
     exit 1
 fi
 
-# Set up model resource paths for Ignition Gazebo
+# Set up model resource paths for Gazebo
 # This helps find models referenced as model://name
+if [ -d "$HOME/.gz/models" ]; then
+    export IGN_GAZEBO_RESOURCE_PATH="${IGN_GAZEBO_RESOURCE_PATH:+$IGN_GAZEBO_RESOURCE_PATH:}$HOME/.gz/models"
+    export GZ_SIM_RESOURCE_PATH="${GZ_SIM_RESOURCE_PATH:+$GZ_SIM_RESOURCE_PATH:}$HOME/.gz/models"
+fi
 if [ -d "$HOME/.gazebo/models" ]; then
     export IGN_GAZEBO_RESOURCE_PATH="${IGN_GAZEBO_RESOURCE_PATH:+$IGN_GAZEBO_RESOURCE_PATH:}$HOME/.gazebo/models"
     export GZ_SIM_RESOURCE_PATH="${GZ_SIM_RESOURCE_PATH:+$GZ_SIM_RESOURCE_PATH:}$HOME/.gazebo/models"
@@ -60,11 +64,13 @@ if command -v ign &> /dev/null; then
     GZ_CMD="ign gazebo"
     GZ_SERVICE_CMD="ign service"
     GZ_TOPIC_CMD="ign topic"
+    GZ_MSGS_PKG="ignition.msgs"
     echo "Detected Ignition Gazebo (Fortress)"
 elif command -v gz &> /dev/null && gz sim --help &> /dev/null; then
     GZ_CMD="gz sim"
     GZ_SERVICE_CMD="gz service"
     GZ_TOPIC_CMD="gz topic"
+    GZ_MSGS_PKG="gz.msgs"
     echo "Detected Gazebo Sim (Garden/Harmonic)"
 else
     echo "Error: Neither 'ign gazebo' nor 'gz sim' found!"
@@ -196,8 +202,12 @@ cleanup() {
         rm -f "$TEMP_WORLD_FILE" 2>/dev/null || true
     fi
     
-    # Remove temporary log file
-    rm -f /tmp/gazebo_map_gen.log 2>/dev/null || true
+    # Remove temporary log file only on success, so failures can be debugged
+    if [ "${SUCCESS:-false}" = true ]; then
+        rm -f /tmp/gazebo_map_gen.log 2>/dev/null || true
+    else
+        echo "(debug) Gazebo log kept at /tmp/gazebo_map_gen.log"
+    fi
 }
 
 trap cleanup EXIT INT TERM
@@ -215,6 +225,9 @@ if [ -d "$HOME/.ignition/gazebo_models" ]; then
 fi
 if [ -d "$HOME/.gazebo/models" ]; then
     export IGN_GAZEBO_RESOURCE_PATH="$HOME/.gazebo/models${IGN_GAZEBO_RESOURCE_PATH:+:$IGN_GAZEBO_RESOURCE_PATH}"
+fi
+if [ -d "$HOME/.gz/models" ]; then
+    export IGN_GAZEBO_RESOURCE_PATH="$HOME/.gz/models${IGN_GAZEBO_RESOURCE_PATH:+:$IGN_GAZEBO_RESOURCE_PATH}"
 fi
 if [ -n "$IGN_GAZEBO_RESOURCE_PATH" ]; then
     echo "Using model path: $IGN_GAZEBO_RESOURCE_PATH"
@@ -260,14 +273,14 @@ echo "[3/4] Triggering map generation..."
 # Note: --req '' is required even for Empty message type
 if $GZ_SERVICE_CMD -l 2>/dev/null | grep -q "generate_map"; then
     $GZ_SERVICE_CMD -s /gazebo_2Dmap_plugin/generate_map \
-        --reqtype ignition.msgs.Empty --reptype ignition.msgs.Empty \
+        --reqtype "$GZ_MSGS_PKG.Empty" --reptype "$GZ_MSGS_PKG.Empty" \
         --timeout 5000 --req '' > /dev/null 2>&1 || true
     sleep 2
 else
     echo "WARNING: generate_map service not found yet, waiting..."
     sleep 3
     $GZ_SERVICE_CMD -s /gazebo_2Dmap_plugin/generate_map \
-        --reqtype ignition.msgs.Empty --reptype ignition.msgs.Empty \
+        --reqtype "$GZ_MSGS_PKG.Empty" --reptype "$GZ_MSGS_PKG.Empty" \
         --timeout 5000 --req '' > /dev/null 2>&1 || true
     sleep 2
 fi
@@ -287,6 +300,7 @@ done
 
 # Verify files were created
 if [ -f "${MAP_NAME}.yaml" ] && [ -f "${MAP_NAME}.pgm" ]; then
+    SUCCESS=true
     echo ""
     echo "================================================"
     echo "✓ SUCCESS: Map generated successfully"
@@ -309,8 +323,8 @@ else
     echo "4. Try running manually:"
     echo "   export IGN_GAZEBO_SYSTEM_PLUGIN_PATH=$PLUGIN_PATH"
     echo "   $GZ_CMD -s $WORLD_FILE"
-    echo "   ros2 run ros_gz_bridge parameter_bridge /map2d@nav_msgs/msg/OccupancyGrid[ignition.msgs.OccupancyGrid"
-    echo "   $GZ_SERVICE_CMD -s /gazebo_2Dmap_plugin/generate_map --reqtype ignition.msgs.Empty --reptype ignition.msgs.Empty"
+    echo "   ros2 run ros_gz_bridge parameter_bridge /map2d@nav_msgs/msg/OccupancyGrid[$GZ_MSGS_PKG.OccupancyGrid"
+    echo "   $GZ_SERVICE_CMD -s /gazebo_2Dmap_plugin/generate_map --reqtype "$GZ_MSGS_PKG.Empty" --reptype "$GZ_MSGS_PKG.Empty""
     echo "================================================"
     exit 1
 fi

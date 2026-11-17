@@ -26,20 +26,55 @@
 #include <string>
 #include <vector>
 
-// Ignition Fortress headers
-#include <ignition/gazebo/System.hh>
-#include <ignition/transport/Node.hh>
-#include <ignition/msgs/occupancy_grid.pb.h>
-#include <ignition/msgs/empty.pb.h>
-#include <ignition/math/AxisAlignedBox.hh>
+// GZ_2DMAP_USE_GZ_NAMESPACE is defined by CMakeLists.txt when building
+// against gz-sim7 (Garden) or gz-sim8 (Harmonic). When it is NOT defined,
+// we build against ignition-gazebo6 (Fortress) instead.
+#if defined(GZ_2DMAP_USE_GZ_NAMESPACE)
+  // Garden / Harmonic headers (renamed "gz" namespace)
+  #include <gz/sim/System.hh>
+  #include <gz/transport/Node.hh>
+  #include <gz/msgs/occupancy_grid.pb.h>
+  #include <gz/msgs/empty.pb.h>
+  #include <gz/math/AxisAlignedBox.hh>
+  #include <gz/common/Console.hh>
 
-// Compatibility namespace alias for Ignition Fortress
-namespace gz_compat {
-  namespace sim = ignition::gazebo;
-  namespace transport = ignition::transport;
-  namespace msgs = ignition::msgs;
-  namespace math = ignition::math;
-}
+  namespace gz_compat {
+    namespace sim = gz::sim;
+    namespace transport = gz::transport;
+    namespace msgs = gz::msgs;
+    namespace math = gz::math;
+  }
+
+  #define GZ2D_MSG gzmsg
+  #define GZ2D_ERR gzerr
+  #define GZ2D_WARN gzwarn
+  #define GZ2D_DBG gzdbg
+  #define GZ2D_ADD_PLUGIN GZ_ADD_PLUGIN
+  #define GZ2D_ADD_PLUGIN_ALIAS GZ_ADD_PLUGIN_ALIAS
+#else
+  // Ignition Fortress headers
+  #include <ignition/gazebo/System.hh>
+  #include <ignition/transport/Node.hh>
+  #include <ignition/msgs/occupancy_grid.pb.h>
+  #include <ignition/msgs/empty.pb.h>
+  #include <ignition/math/AxisAlignedBox.hh>
+  #include <ignition/common/Console.hh>
+
+  // Compatibility namespace alias for Ignition Fortress
+  namespace gz_compat {
+    namespace sim = ignition::gazebo;
+    namespace transport = ignition::transport;
+    namespace msgs = ignition::msgs;
+    namespace math = ignition::math;
+  }
+
+  #define GZ2D_MSG ignmsg
+  #define GZ2D_ERR ignerr
+  #define GZ2D_WARN ignwarn
+  #define GZ2D_DBG igndbg
+  #define GZ2D_ADD_PLUGIN IGNITION_ADD_PLUGIN
+  #define GZ2D_ADD_PLUGIN_ALIAS IGNITION_ADD_PLUGIN_ALIAS
+#endif
 
 namespace gz_2dmap_plugin
 {

@@ -28,20 +28,35 @@
 #include <limits>
 #include <queue>
 
-// Use ignition naming for Fortress
-#include <ignition/plugin/Register.hh>
-#include <ignition/gazebo/World.hh>
-#include <ignition/gazebo/Model.hh>
-#include <ignition/gazebo/Link.hh>
-#include <ignition/gazebo/components/Model.hh>
-#include <ignition/gazebo/components/Name.hh>
-#include <ignition/gazebo/components/Pose.hh>
-#include <ignition/gazebo/components/Collision.hh>
-#include <ignition/gazebo/components/Geometry.hh>
-#include <ignition/gazebo/components/World.hh>
-#include <ignition/gazebo/Util.hh>
-#include <ignition/common/Console.hh>
-#include <ignition/math/Vector3.hh>
+#if defined(GZ_2DMAP_USE_GZ_NAMESPACE)
+  // Garden / Harmonic naming
+  #include <gz/plugin/Register.hh>
+  #include <gz/sim/World.hh>
+  #include <gz/sim/Model.hh>
+  #include <gz/sim/Link.hh>
+  #include <gz/sim/components/Model.hh>
+  #include <gz/sim/components/Name.hh>
+  #include <gz/sim/components/Pose.hh>
+  #include <gz/sim/components/Collision.hh>
+  #include <gz/sim/components/Geometry.hh>
+  #include <gz/sim/components/World.hh>
+  #include <gz/sim/Util.hh>
+  #include <gz/math/Vector3.hh>
+#else
+  // Ignition Fortress naming
+  #include <ignition/plugin/Register.hh>
+  #include <ignition/gazebo/World.hh>
+  #include <ignition/gazebo/Model.hh>
+  #include <ignition/gazebo/Link.hh>
+  #include <ignition/gazebo/components/Model.hh>
+  #include <ignition/gazebo/components/Name.hh>
+  #include <ignition/gazebo/components/Pose.hh>
+  #include <ignition/gazebo/components/Collision.hh>
+  #include <ignition/gazebo/components/Geometry.hh>
+  #include <ignition/gazebo/components/World.hh>
+  #include <ignition/gazebo/Util.hh>
+  #include <ignition/math/Vector3.hh>
+#endif
 
 // SDF headers for geometry shapes
 #include <sdf/Box.hh>
@@ -53,14 +68,19 @@
 namespace gz_2dmap_plugin
 {
 
-// Namespace aliases for Ignition Fortress
+// Namespace aliases (Fortress: ignition::, Garden/Harmonic: gz::)
+#if defined(GZ_2DMAP_USE_GZ_NAMESPACE)
+namespace sim = gz::sim;
+namespace math = gz::math;
+#else
 namespace sim = ignition::gazebo;
 namespace math = ignition::math;
+#endif
 
 //////////////////////////////////////////////////
 OccupancyMapFromWorld::OccupancyMapFromWorld()
 {
-  ignmsg << "[" << name_ << "] Occupancy map plugin started" << std::endl;
+  GZ2D_MSG << "[" << name_ << "] Occupancy map plugin started" << std::endl;
 }
 
 //////////////////////////////////////////////////
@@ -82,7 +102,7 @@ void OccupancyMapFromWorld::Configure(
   {
     mapResolution_ = _sdf->Get<double>("map_resolution");
   }
-  ignmsg << "[" << name_ << "] Map resolution: " << mapResolution_ << std::endl;
+  GZ2D_MSG << "[" << name_ << "] Map resolution: " << mapResolution_ << std::endl;
 
   // Get map height (z-level for slicing)
   if (_sdf->HasElement("map_height"))
@@ -93,7 +113,7 @@ void OccupancyMapFromWorld::Configure(
   {
     mapHeight_ = _sdf->Get<double>("map_z");
   }
-  ignmsg << "[" << name_ << "] Map height: " << mapHeight_ << std::endl;
+  GZ2D_MSG << "[" << name_ << "] Map height: " << mapHeight_ << std::endl;
 
   // Get initial robot position
   if (_sdf->HasElement("init_robot_x"))
@@ -104,7 +124,7 @@ void OccupancyMapFromWorld::Configure(
   {
     initRobotY_ = _sdf->Get<double>("init_robot_y");
   }
-  ignmsg << "[" << name_ << "] Init position: (" << initRobotX_ << ", " 
+  GZ2D_MSG << "[" << name_ << "] Init position: (" << initRobotX_ << ", " 
         << initRobotY_ << ")" << std::endl;
 
   // Get map margin
@@ -137,7 +157,7 @@ void OccupancyMapFromWorld::Configure(
         double maxExtentX = std::max(std::abs(minX), std::abs(maxX));
         mapSizeX_ = 2.0 * maxExtentX + 2.0 * mapMargin_;
         mapOriginX_ = 0.0;
-        ignmsg << "[" << name_ << "] Auto-detected map_size_x: " << mapSizeX_
+        GZ2D_MSG << "[" << name_ << "] Auto-detected map_size_x: " << mapSizeX_
               << " (world bounds: " << minX << " to " << maxX << ")" << std::endl;
       }
 
@@ -146,13 +166,13 @@ void OccupancyMapFromWorld::Configure(
         double maxExtentY = std::max(std::abs(minY), std::abs(maxY));
         mapSizeY_ = 2.0 * maxExtentY + 2.0 * mapMargin_;
         mapOriginY_ = 0.0;
-        ignmsg << "[" << name_ << "] Auto-detected map_size_y: " << mapSizeY_
+        GZ2D_MSG << "[" << name_ << "] Auto-detected map_size_y: " << mapSizeY_
               << " (world bounds: " << minY << " to " << maxY << ")" << std::endl;
       }
     }
     else
     {
-      ignwarn << "[" << name_ << "] Failed to auto-detect world bounds. "
+      GZ2D_WARN << "[" << name_ << "] Failed to auto-detect world bounds. "
              << "Using default values." << std::endl;
     }
   }
@@ -161,24 +181,24 @@ void OccupancyMapFromWorld::Configure(
   cellsSizeX_ = static_cast<unsigned int>(mapSizeX_ / mapResolution_);
   cellsSizeY_ = static_cast<unsigned int>(mapSizeY_ / mapResolution_);
 
-  ignmsg << "[" << name_ << "] Map configuration - Size: " << mapSizeX_ << "x" 
+  GZ2D_MSG << "[" << name_ << "] Map configuration - Size: " << mapSizeX_ << "x" 
         << mapSizeY_ << ", Cells: " << cellsSizeX_ << "x" << cellsSizeY_ << std::endl;
 
   // Initialize Gazebo transport
   std::string mapTopic = "/map2d";
   mapPub_ = node_.Advertise<gz_compat::msgs::OccupancyGrid>(mapTopic);
-  ignmsg << "[" << name_ << "] Publishing map on: " << mapTopic << std::endl;
+  GZ2D_MSG << "[" << name_ << "] Publishing map on: " << mapTopic << std::endl;
 
   // Advertise the generate_map service
   std::string serviceName = "/gazebo_2Dmap_plugin/generate_map";
   node_.Advertise(serviceName, &OccupancyMapFromWorld::OnGenerateMap, this);
-  ignmsg << "[" << name_ << "] Service available: " << serviceName << std::endl;
+  GZ2D_MSG << "[" << name_ << "] Service available: " << serviceName << std::endl;
 
   // Get output path for saving map files directly
   if (_sdf->HasElement("output_path"))
   {
     outputPath_ = _sdf->Get<std::string>("output_path");
-    ignmsg << "[" << name_ << "] Will save map to: " << outputPath_ << std::endl;
+    GZ2D_MSG << "[" << name_ << "] Will save map to: " << outputPath_ << std::endl;
   }
 
   configured_ = true;
@@ -210,20 +230,20 @@ void OccupancyMapFromWorld::PostUpdate(
         {
           double maxExtentX = std::max(std::abs(minX), std::abs(maxX));
           mapSizeX_ = 2.0 * maxExtentX + 2.0 * mapMargin_;
-          ignmsg << "[" << name_ << "] Auto-detected map_size_x: " << mapSizeX_
+          GZ2D_MSG << "[" << name_ << "] Auto-detected map_size_x: " << mapSizeX_
                 << " (bounds: " << minX << " to " << maxX << ")" << std::endl;
         }
         if (!mapSizeYSpecified_)
         {
           double maxExtentY = std::max(std::abs(minY), std::abs(maxY));
           mapSizeY_ = 2.0 * maxExtentY + 2.0 * mapMargin_;
-          ignmsg << "[" << name_ << "] Auto-detected map_size_y: " << mapSizeY_
+          GZ2D_MSG << "[" << name_ << "] Auto-detected map_size_y: " << mapSizeY_
                 << " (bounds: " << minY << " to " << maxY << ")" << std::endl;
         }
         // Recalculate cell counts
         cellsSizeX_ = static_cast<unsigned int>(mapSizeX_ / mapResolution_);
         cellsSizeY_ = static_cast<unsigned int>(mapSizeY_ / mapResolution_);
-        ignmsg << "[" << name_ << "] Map cells: " << cellsSizeX_ << "x" << cellsSizeY_ << std::endl;
+        GZ2D_MSG << "[" << name_ << "] Map cells: " << cellsSizeX_ << "x" << cellsSizeY_ << std::endl;
       }
     }
     
@@ -243,7 +263,7 @@ bool OccupancyMapFromWorld::OnGenerateMap(
     const gz_compat::msgs::Empty &/*_req*/,
     gz_compat::msgs::Empty &/*_rep*/)
 {
-  ignmsg << "[" << name_ << "] Map generation requested" << std::endl;
+  GZ2D_MSG << "[" << name_ << "] Map generation requested" << std::endl;
   generateMapRequested_ = true;
   return true;
 }
@@ -355,7 +375,7 @@ bool OccupancyMapFromWorld::ComputeWorldBounds(
       }
 
       modelCount++;
-      igndbg << "[" << name_ << "] Model '" << _name->Data() 
+      GZ2D_DBG << "[" << name_ << "] Model '" << _name->Data() 
             << "': X[" << modelMinX << ", " << modelMaxX 
             << "], Y[" << modelMinY << ", " << modelMaxY << "]" << std::endl;
 
@@ -364,13 +384,13 @@ bool OccupancyMapFromWorld::ComputeWorldBounds(
 
   if (modelCount > 0 && boundsInitialized)
   {
-    ignmsg << "[" << name_ << "] Computed world bounds from " << modelCount 
+    GZ2D_MSG << "[" << name_ << "] Computed world bounds from " << modelCount 
           << " models: X[" << minX << ", " << maxX 
           << "], Y[" << minY << ", " << maxY << "]" << std::endl;
     return true;
   }
 
-  ignwarn << "[" << name_ << "] No valid bounding boxes found" << std::endl;
+  GZ2D_WARN << "[" << name_ << "] No valid bounding boxes found" << std::endl;
   return false;
 }
 
@@ -549,7 +569,7 @@ bool OccupancyMapFromWorld::WorldCellIntersection(
 void OccupancyMapFromWorld::CreateOccupancyMap(
     const gz_compat::sim::EntityComponentManager &_ecm)
 {
-  ignmsg << "[" << name_ << "] Starting wavefront expansion for mapping" << std::endl;
+  GZ2D_MSG << "[" << name_ << "] Starting wavefront expansion for mapping" << std::endl;
 
   // Initialize occupancy data
   occupancyData_.resize(cellsSizeX_ * cellsSizeY_);
@@ -561,7 +581,7 @@ void OccupancyMapFromWorld::CreateOccupancyMap(
 
   if (!Cell2Index(cellX, cellY, mapIndex))
   {
-    ignerr << "[" << name_ << "] Initial robot position (" << initRobotX_ 
+    GZ2D_ERR << "[" << name_ << "] Initial robot position (" << initRobotX_ 
           << ", " << initRobotY_ << ") is outside map bounds" << std::endl;
     return;
   }
@@ -620,7 +640,7 @@ void OccupancyMapFromWorld::CreateOccupancyMap(
   long freeCount = std::count(occupancyData_.begin(), occupancyData_.end(), 0);
   long occupiedCount = std::count(occupancyData_.begin(), occupancyData_.end(), 100);
 
-  ignmsg << "[" << name_ << "] Map generation completed - Size: " << cellsSizeX_ 
+  GZ2D_MSG << "[" << name_ << "] Map generation completed - Size: " << cellsSizeX_ 
         << "x" << cellsSizeY_ << ", Occupied: " << occupiedCount 
         << ", Free: " << freeCount << std::endl;
 }
@@ -666,7 +686,7 @@ void OccupancyMapFromWorld::PublishMap()
   // Publish
   mapPub_.Publish(msg);
   
-  ignmsg << "[" << name_ << "] Map published on /map2d topic" << std::endl;
+  GZ2D_MSG << "[" << name_ << "] Map published on /map2d topic" << std::endl;
 }
 
 //////////////////////////////////////////////////
@@ -679,7 +699,7 @@ void OccupancyMapFromWorld::SaveMapToFiles(const std::string &basePath)
   std::ofstream pgmFile(pgmPath, std::ios::binary);
   if (!pgmFile.is_open())
   {
-    ignerr << "[" << name_ << "] Failed to open PGM file: " << pgmPath << std::endl;
+    GZ2D_ERR << "[" << name_ << "] Failed to open PGM file: " << pgmPath << std::endl;
     return;
   }
 
@@ -722,7 +742,7 @@ void OccupancyMapFromWorld::SaveMapToFiles(const std::string &basePath)
   std::ofstream yamlFile(yamlPath);
   if (!yamlFile.is_open())
   {
-    ignerr << "[" << name_ << "] Failed to open YAML file: " << yamlPath << std::endl;
+    GZ2D_ERR << "[" << name_ << "] Failed to open YAML file: " << yamlPath << std::endl;
     return;
   }
 
@@ -742,18 +762,26 @@ void OccupancyMapFromWorld::SaveMapToFiles(const std::string &basePath)
   yamlFile << "free_thresh: 0.196\n";
   yamlFile.close();
 
-  ignmsg << "[" << name_ << "] Map files saved: " << pgmPath << " and " << yamlPath << std::endl;
+  GZ2D_MSG << "[" << name_ << "] Map files saved: " << pgmPath << " and " << yamlPath << std::endl;
 }
 
 }  // namespace gz_2dmap_plugin
 
-// Register the plugin for Ignition Fortress
-IGNITION_ADD_PLUGIN(
+// Register the plugin (macro resolves to IGNITION_ADD_PLUGIN on Fortress,
+// GZ_ADD_PLUGIN on Garden/Harmonic - see gz_2Dmap_system.hh)
+GZ2D_ADD_PLUGIN(
     gz_2dmap_plugin::OccupancyMapFromWorld,
-    ignition::gazebo::System,
+    sim::System,
     gz_2dmap_plugin::OccupancyMapFromWorld::ISystemConfigure,
     gz_2dmap_plugin::OccupancyMapFromWorld::ISystemPostUpdate)
 
-IGNITION_ADD_PLUGIN_ALIAS(
+// Register both alias spellings so world files written for either
+// Fortress ("ignition::gazebo::...") or Garden/Harmonic ("gz::sim::...")
+// can find this plugin by name.
+GZ2D_ADD_PLUGIN_ALIAS(
     gz_2dmap_plugin::OccupancyMapFromWorld,
     "ignition::gazebo::systems::OccupancyMapFromWorld")
+
+GZ2D_ADD_PLUGIN_ALIAS(
+    gz_2dmap_plugin::OccupancyMapFromWorld,
+    "gz::sim::systems::OccupancyMapFromWorld")
